@@ -1,12 +1,12 @@
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
 use std::time::Duration;
+use std::{fs, io};
 
 #[derive(Deserialize, Debug)]
-struct MyMemoryResponse {
-   // responseData: Option<TranslateResponse>, // Pole zawierające tłumaczenie
-    //responseStatus: Option<u16>, // Zmiana typu na u16, bo API zwraca liczby
-    //responseDetails: Option<String>,
+pub struct HttpResponse {
+    responseData: Option<TranslateResponse>,
+    responseStatus: Option<u16>
 }
 
 #[derive(Deserialize, Debug)]
@@ -14,60 +14,70 @@ struct TranslateResponse {
     translatedText: String,
 }
 
-async fn translate_text(text: &str, api_key: &str) -> Result<String, String> {
-    println!("etap 1 - wysyłanie zapytania");
-
-    // Utwórz klienta HTTP
+async fn translate_text(text: &str, api_key: &str, pair: &str) -> Result<String, String> {
     let client = Client::new();
 
-    // Wysyłamy zapytanie GET do API MyMemory z parametrami w query string
-    let response = client
-        .get("https://api.mymemory.translated.net/get")
-        .query(&[("q", text), ("langpair", "pl|es"), ("key", api_key)])
+    let response = client.get("https://api.mymemory.translated.net/get")
+    .query(&[("q", text), ("langpair", pair), ("key", api_key)])
         .timeout(Duration::new(30, 0))
         .send()
         .await;
 
     match response {
-        Ok(res) => {
-            if res.status() == StatusCode::OK {
-                println!("etap 2 - odpowiedź otrzymana");
-
-                // Deserializujemy pełną odpowiedź JSON
-                let full_response: MyMemoryResponse = res.json().await.map_err(|e| e.to_string())?;
-                println!("Otrzymana odpowiedź: {:?}", full_response);
-
-                if let Some(data) = full_response.responseData {
-                    println!("etap 3 - tłumaczenie: {}", data.translatedText);
-                    Ok(data.translatedText)
+        Ok(resp) => {
+            if resp.status() == StatusCode::OK {
+                let full_response: HttpResponse = resp.json().await.unwrap();
+                if let Some(translated_response) = full_response.responseData {
+                    Ok(translated_response.translatedText)
                 } else {
-                    Err("Brak danych tłumaczenia w odpowiedzi".to_string())
+                    Err("No translation found".to_string())
                 }
             } else {
-                let error_message = format!(
-                    "Błąd odpowiedzi API: {} - szczegóły: {}",
-                    res.status(),
-                    res.text().await.unwrap_or_else(|_| "Brak szczegółów".to_string())
-                );
-                Err(error_message)
+                Err(format!("Error: {}", resp.status()))
+
             }
         }
-        Err(e) => {
-            eprintln!("Błąd zapytania: {}", e);
-            Err("Błąd zapytania".to_string())
+        Err(_) => {
+            Err("Failed to send request".to_string())
         }
     }
+}    
+
+fn get_pair() -> String {
+    let mut pair = String::new();
+    println!("Enter the language pair (e.g., 'en|es' for English to Spanish): ");
+    io::stdin().read_line(&mut pair).expect("Failed to read line");
+    pair.trim().to_string()
+}
+
+fn get_text() -> String {
+    let mut text = String::new();
+    println!("Enter the text to translate: ");
+    io::stdin().read_line(&mut text).expect("Failed to read line");
+    text.trim().to_string()
+}
+
+fn get_file_path() -> String {
+    let mut text = String::new();
+    println!("Enter the file path to translate: ");
+    io::stdin().read_line(&mut text).expect("Failed to read line");
+    text.trim().to_string()
 }
 
 #[tokio::main]
-async fn main() {
-    println!("Zaczynamy tłumaczenie...");
+async fn main() { 
+    let pair = get_pair();
+    let path = get_file_path();
+    let api_key = "YOUR_API_KEY"; // Replace with your actual API key
+    //let text = get_text();
 
-    // Podaj swój klucz API MyMemory
-    let api_key = "Nie tak prędko"; // Zamień "YOUR_API_KEY" na swój rzeczywisty klucz API
-
-    match translate_text("Mam na imię Wojtek, jestem Polakiem i jestem super!", api_key).await {
-        Ok(result) => println!("Tłumaczenie: {}", result),
-        Err(e) => eprintln!("Błąd: {}", e),
+    let text = std::fs::read_to_string(&path).expect("Unable to read file");
+    fs::write(&path, "").unwrap();
+    match translate_text(&text, api_key, &pair).await {
+        Ok(translated_text) => {
+            fs::write(&path, translated_text).expect("Unable to write file");
+            println!("Wszystko top");
+        }
+        Err(e) => eprintln!("Error: {}", e),
     }
 }
