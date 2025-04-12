@@ -1,7 +1,6 @@
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
 use std::time::Duration;
-use whatlang::detect;
 
 #[derive(Deserialize, Debug)]
 pub struct HttpResponse {

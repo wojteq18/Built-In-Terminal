@@ -1,8 +1,9 @@
 mod translate_text;
+mod detect_language;
 
-use whatlang::detect;
 use std::{fs, io};
 use translate_text::{translate_text};
+use detect_language::detect_language;
     
 
 fn get_text() -> String {
@@ -11,49 +12,67 @@ fn get_text() -> String {
     text.trim().to_string()
 }
 
+fn get_language_pair(text: &str) -> Option<String> {
+    println!("Do you want to try to detect language? (y/n)");
+    match get_text().as_str() {
+        "y" => {
+            println!("To which language you want to translate?");
+            let lang = get_text();
+            Some(format!("{}|{}", detect_language(text).ok()?, lang))
+        }
+        "n" => {
+            println!("Type pair of language - ex: pl|en");
+            Some(get_text())
+        }
+        _ => {
+            println!("Invalid input.");
+            None
+        }
+    }
+}
 
 #[tokio::main]
-async fn main() { 
+async fn main() {
     let api_key = "YOUR_API_KEY"; // Replace with your actual API key
-    println!("Type action to perform: 1 - translate text; 2 - translate text file");
-    let mut action = String::new();
-    io::stdin().read_line(&mut action).expect("Failed to read line");
 
-    let action_num: i32 = action.trim().parse().expect("Please type a number!");
-    
+    println!("Choose action:\n1 - Translate text\n2 - Translate text file");
+    let action = get_text();
 
-    match action_num {
-        1 => {
-            println!("Type pair of language - first language to translate from, second language to translate to: ex (pl|en)");
-            let pair = get_text();
+    match action.as_str() {
+        "1" => {
             println!("Type text to translate:");
             let text = get_text();
 
-            match translate_text(&text, &api_key, &pair).await {
-                Ok(translated_text) => {
-                    println!("Translated text: {}", translated_text);
-                }
-                Err(e) => eprintln!("Error: {}", e),
-            }
-        }
-        2 => {
-            println!("Type pair of language - first language to translate from, second language to translate to: ex (pl|en)");
-            let pair = get_text();
-            println!("Type path to file:");
-            let path = get_text();
-            let text = std::fs::read_to_string(&path).expect("Unable to read file");
+            let pair = match get_language_pair(&text) {
+                Some(p) => p,
+                None => return,
+            };
 
             match translate_text(&text, api_key, &pair).await {
-                Ok(translated_text) => {
-                    fs::write(&path, translated_text).expect("Unable to write file");
-                    println!("File translated");
+                Ok(translated) => println!("Translated text:\n{}", translated),
+                Err(e) => eprintln!("Error: {}", e),
+            }
+        }
+
+        "2" => {
+            println!("Type path to file:");
+            let path = get_text();
+            let text = fs::read_to_string(&path).expect("Unable to read file");
+
+            let pair = match get_language_pair(&text) {
+                Some(p) => p,
+                None => return,
+            };
+
+            match translate_text(&text, api_key, &pair).await {
+                Ok(translated) => {
+                    fs::write(&path, translated).expect("Unable to write file");
+                    println!("File translated successfully.");
                 }
                 Err(e) => eprintln!("Error: {}", e),
             }
         }
-        _ => {
-            println!("Invalid action");
-            return;
-        }
+
+        _ => println!("Invalid action."),
     }
 }
