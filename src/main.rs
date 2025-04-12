@@ -1,9 +1,12 @@
 mod translate_text;
 mod detect_language;
+//mod file_operations;
 
 use std::{fs, io};
 use translate_text::{translate_text};
 use detect_language::detect_language;
+use pdf_extract::extract_text;
+
     
 
 fn get_text() -> String {
@@ -29,6 +32,25 @@ fn get_language_pair(text: &str) -> Option<String> {
             None
         }
     }
+}
+
+#[derive(Debug)]
+enum FileType {
+    Pdf,
+    Txt,
+    Other(String),
+}
+
+pub fn get_file_type(path: &str) -> Result<String, String> {
+
+    let file_type = match path {
+        path if path.ends_with(".pdf") => Ok(FileType::Pdf),
+        path if path.ends_with(".txt") => Ok(FileType::Txt),
+        _ => Err(format!("Unsupported file type: {}", path)),
+    };
+
+    file_type.map(|ft| format!("{:?}", ft))
+
 }
 
 #[tokio::main]
@@ -57,20 +79,45 @@ async fn main() {
         "2" => {
             println!("Type path to file:");
             let path = get_text();
-            let text = fs::read_to_string(&path).expect("Unable to read file");
+            let file_type = get_file_type(&path).unwrap();
+        
+            match file_type.as_str() {
+                "Txt"  => {
+                    let text = fs::read_to_string(&path).expect("Unable to read file");
 
-            let pair = match get_language_pair(&text) {
-                Some(p) => p,
-                None => return,
-            };
+                    let pair = match get_language_pair(&text) {
+                        Some(p) => p,
+                        None => return,
+                    };
+        
+                    match translate_text(&text, api_key, &pair).await {
+                        Ok(translated) => {
+                            fs::write(&path, translated).expect("Unable to write file");
+                            println!("File translated successfully.");
+                        }
+                        Err(e) => eprintln!("Error: {}", e),
+                    }
 
-            match translate_text(&text, api_key, &pair).await {
-                Ok(translated) => {
-                    fs::write(&path, translated).expect("Unable to write file");
-                    println!("File translated successfully.");
                 }
-                Err(e) => eprintln!("Error: {}", e),
-            }
+                "Pdf" => {
+                    let text = extract_text(path).unwrap();
+
+                    let pair = match get_language_pair(&text) {
+                        Some(p) => p,
+                        None => return,
+                    };
+                    match translate_text(&text, api_key, &pair).await {
+                        Ok(translated) => {
+                            println!("Translated text:\n{}", translated);
+                        }
+                        Err(e) => eprintln!("Error: {}", e),
+                    }
+                }
+                _ => {
+                    println!("Unsupported file type.");
+                    return;
+                }
+            };
         }
 
         _ => println!("Invalid action."),

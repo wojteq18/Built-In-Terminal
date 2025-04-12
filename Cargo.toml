@@ -9,4 +9,4 @@ tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 whatlang = "0.16.4"
-pdf = "0.9.0"
+pdf-extract = "0.9.0"
