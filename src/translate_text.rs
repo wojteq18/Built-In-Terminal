@@ -5,7 +5,7 @@ use std::time::Duration;
 #[derive(Deserialize, Debug)]
 pub struct HttpResponse {
     responseData: Option<TranslateResponse>,
-    responseStatus: Option<String>,
+    responseStatus: Option<u16>
 }
 
 #[derive(Deserialize, Debug)]

@@ -34,6 +34,21 @@ fn get_language_pair(text: &str) -> Option<String> {
     }
 }
 
+fn divide_into_blocks(text: &str) -> Vec<String> {
+    let mut blocks = Vec::new();
+    let mut current_string = String::new();
+    for i in text.chars() {
+        if current_string.len() > 490 {
+            current_string.push(' ');
+            blocks.push(current_string.clone());
+            current_string.clear();    
+        }
+        current_string.push(i);
+    }
+    return blocks;
+}            
+
+
 #[derive(Debug)]
 enum FileType {
     Pdf,
@@ -101,17 +116,24 @@ async fn main() {
                 }
                 "Pdf" => {
                     let text = extract_text(path).unwrap();
+                    let blocks = divide_into_blocks(&text);
+                    let mut whole_text = String::new();
 
                     let pair = match get_language_pair(&text) {
                         Some(p) => p,
                         None => return,
                     };
-                    match translate_text(&text, api_key, &pair).await {
-                        Ok(translated) => {
-                            println!("Translated text:\n{}", translated);
+
+                     for i in blocks {
+                        match translate_text(&i, api_key, &pair).await {
+                            Ok(translated) => {
+                                whole_text.push_str(&translated);
+                            }
+                            Err(e) => eprintln!("Error: {}", e),
                         }
-                        Err(e) => eprintln!("Error: {}", e),
+                        println!("Translated text:\n{}", whole_text);
                     }
+
                 }
                 _ => {
                     println!("Unsupported file type.");
