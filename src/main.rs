@@ -1,79 +1,79 @@
 mod translate_text;
 mod detect_language;
-//mod file_operations;
+mod file_operations;
 
-use std::{fs, io};
-use translate_text::{translate_text};
+use translate_text::translate_text;
 use detect_language::detect_language;
-use pdf_extract::extract_text;
-
-    
-
-fn get_text() -> String {
-    let mut text = String::new();
-    io::stdin().read_line(&mut text).expect("Failed to read line");
-    text.trim().to_string()
-}
-
-fn get_language_pair(text: &str) -> Option<String> {
-    println!("Do you want to try to detect language? (y/n)");
-    match get_text().as_str() {
-        "y" => {
-            println!("To which language you want to translate?");
-            let lang = get_text();
-            Some(format!("{}|{}", detect_language(text).ok()?, lang))
-        }
-        "n" => {
-            println!("Type pair of language - ex: pl|en");
-            Some(get_text())
-        }
-        _ => {
-            println!("Invalid input.");
-            None
-        }
-    }
-}
-
-fn divide_into_blocks(text: &str) -> Vec<String> {
-    let mut blocks = Vec::new();
-    let mut current_string = String::new();
-    for i in text.chars() {
-        if current_string.len() > 490 {
-            current_string.push(' ');
-            blocks.push(current_string.clone());
-            current_string.clear();    
-        }
-        current_string.push(i);
-    }
-    return blocks;
-}            
-
-
-#[derive(Debug)]
-enum FileType {
-    Pdf,
-    Txt,
-    Other(String),
-}
-
-pub fn get_file_type(path: &str) -> Result<String, String> {
-
-    let file_type = match path {
-        path if path.ends_with(".pdf") => Ok(FileType::Pdf),
-        path if path.ends_with(".txt") => Ok(FileType::Txt),
-        _ => Err(format!("Unsupported file type: {}", path)),
-    };
-
-    file_type.map(|ft| format!("{:?}", ft))
-
-}
+use file_operations::divide_into_blocks;
+use std::process::{Command, Stdio};
 
 #[tokio::main]
 async fn main() {
-    let api_key = "YOUR_API_KEY"; // Replace with your actual API key
+    let api_key = "YOUR API KEY"; // Replace with your actual API key
 
-    println!("Choose action:\n1 - Translate text\n2 - Translate text file");
-    let action = get_text();
+    let output = Command::new("xclip")
+    .args(&["-o", "-selection", "primary"])
+    .output()
+    .expect("failed to execute xclip");
+
+    let input_text = String::from_utf8_lossy(&output.stdout);
+
+
+    if input_text.trim().is_empty() {
+        println!("No text found in clipboard.");
+        return;
+    }
+
+    let lang = detect_language(&input_text).unwrap_or_else(|_| "Unknown".to_string());
+
+    let pair = format!("{}|pl", lang);
+
+    let blocks = divide_into_blocks(&input_text);
+    let mut whole_string = String::new();
+
+    for i in blocks {
+        match translate_text(&i, api_key, &pair).await {
+            Ok(translated) => {
+                whole_string.push_str(&translated);
+            }
+            Err(e) => {
+                let _ = Command::new("zenity")
+                    .args(&["--error", "--title=Błąd", "--text", &format!("Błąd tłumaczenia: {}", e)])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn();
+            }
+        }
+    }
+
+    let _ = Command::new("zenity")
+        .args(&["--info", "--title=Tłumaczenie", "--text", &whole_string])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
+
+
+    /*match translate_text(&input_text, api_key, &pair).await {
+        Ok(translated) => {
+            let _ = Command::new("zenity")
+                .args(&["--info", "--title=Tłumaczenie", "--text", &translated])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn();
+        }
+        Err(e) => {
+            let _ = Command::new("zenity")
+                .args(&["--error", "--title=Błąd", "--text", &format!("Błąd tłumaczenia: {}", e)])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn();
+        }
+    }*/
+    
+
+    
+
+   /*  let action = get_text();
 
     match action.as_str() {
         "1" => {
@@ -143,5 +143,5 @@ async fn main() {
         }
 
         _ => println!("Invalid action."),
-    }
+    }*/
 }
