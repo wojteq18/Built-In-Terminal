@@ -9,7 +9,7 @@ use std::process::{Command, Stdio};
 
 #[tokio::main]
 async fn main() {
-    let api_key = "YOUR API KEY"; // Replace with your actual API key
+    let api_key = "YOUR_API_KEY"; // Replace with your actual API key
 
     let output = Command::new("xclip")
     .args(&["-o", "-selection", "primary"])
